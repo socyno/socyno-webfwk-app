@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:tx="http://www.springframework.org/schema/tx"
+    xmlns:mvc="http://www.springframework.org/schema/mvc"
+    xmlns:aop="http://www.springframework.org/schema/aop"
+    xmlns:task="http://www.springframework.org/schema/task"
+    xmlns:context="http://www.springframework.org/schema/context"
+    xmlns:websocket="http://www.springframework.org/schema/websocket"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans-4.2.xsd
+        http://www.springframework.org/schema/tx
+        http://www.springframework.org/schema/tx/spring-tx-4.2.xsd
+        http://www.springframework.org/schema/mvc
+        http://www.springframework.org/schema/mvc/spring-mvc-4.2.xsd
+        http://www.springframework.org/schema/aop
+        http://www.springframework.org/schema/aop/spring-aop-4.2.xsd
+        http://www.springframework.org/schema/context
+        http://www.springframework.org/schema/context/spring-context-4.2.xsd
+        http://www.springframework.org/schema/task
+        http://www.springframework.org/schema/task/spring-task-4.2.xsd
+        http://www.springframework.org/schema/websocket
+        http://www.springframework.org/schema/websocket/spring-websocket-4.2.xsd">
+    
+    <context:annotation-config />
+    <aop:aspectj-autoproxy />
+    
+    <!-- 跨域设置 -->
+    <mvc:cors>
+        <mvc:mapping allowed-origins="*" path="/**" />
+    </mvc:cors>
+    
+    <!-- 注解方法处理适配器 -->
+    <bean class="org.springframework.web.servlet.mvc.annotation.AnnotationMethodHandlerAdapter" />
+    
+    <!-- 数据源配置 -->
+    <bean id="TenantMetaDataSource" class="com.socyno.stateform.service.TenantMetaDataSource">
+        <constructor-arg index="0" value="classpath:jdbc.properties" />
+    </bean>
+    
+    <!-- 动态配置服务 -->
+    <bean id="configBackend" name="configBackend" class="com.socyno.webbsc.config.DBConfigBackend">
+        <constructor-arg index="0" ref="TenantMetaDataSource" />
+    </bean>
+    <bean id="configService" name="configServiceEX" class="com.socyno.webbsc.config.ConfigService">
+        <property name="backend" ref="configBackend" />
+    </bean>
+    <bean id="propertyConfigurer" class="com.socyno.webbsc.config.PropertyPlaceholderLoader">
+        <property name="order" value="1" />
+        <property name="configService" ref="configService" />
+        <property name="baseDataSource" ref="TenantMetaDataSource" />
+        <property name="ignoreUnresolvablePlaceholders" value="true" />
+        <property name="location">
+            <value>classpath:app.properties</value>
+        </property>
+    </bean>
+    
+    <!-- 授权配置注册和校验服务 -->
+    <bean class="com.socyno.stateform.authority.AuthorityParser" />
+    <bean class="com.socyno.stateform.authority.AuthorityAspect" />
+    
+    <!-- 通用流程表单的事件注册服务 -->
+    <bean class="com.socyno.stateform.authority.AuthorityStateFormParser">
+        <constructor-arg index="0" value="*" />
+    </bean>
+    
+    <!-- 注入Spring容器的上下文，支持动态获取容器内 bean 服务 -->
+    <bean class="com.socyno.webbsc.ctxutil.SpringContextUtil" lazy-init="false" />
+    
+    <!-- 业务相关组件服务注入 -->
+    <context:component-scan base-package="com.socyno.webfwk.app" />
+    
+    <!-- 请求响应消息转换器(json 数据转换） -->
+    <bean id="responseConverter"
+        class="com.socyno.webbsc.ctxutil.HttpMessageConverter"
+        lazy-init="false">
+        <constructor-arg name="typeAdapters">
+            <map>
+                <entry key="com.socyno.stateform.authority.Authority" value="" />
+            </map>
+        </constructor-arg>
+        <property name="supportedMediaTypes">
+            <list>
+                <value>text/html;charset=UTF-8</value>
+                <value>application/json;charset=UTF-8</value>
+            </list>
+        </property>
+    </bean>
+    
+    <!-- 数据 JSON 序列化 -->
+    <mvc:annotation-driven>
+        <mvc:message-converters register-defaults="true">
+            <ref bean="responseConverter"></ref>
+        </mvc:message-converters>
+    </mvc:annotation-driven>
+    
+    <mvc:interceptors>
+        <!-- 授权拦截器 -->
+        <mvc:interceptor>
+            <!-- 拦截地址 -->
+            <mvc:mapping path="/**" />
+            <!-- 排除地址 -->
+            <mvc:exclude-mapping path="/api/user/login" />
+            <bean class="com.socyno.webfwk.token.SessionContextInterceptor">
+                <constructor-arg index="0" value="YES" />
+            </bean>
+        </mvc:interceptor>
+    </mvc:interceptors>
+</beans>

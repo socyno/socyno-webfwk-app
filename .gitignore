@@ -1,0 +1,7 @@
+.tomcatplugin
+bin/
+target/
+war/
+work/
+.settings
+.classpath
